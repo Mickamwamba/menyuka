@@ -168,12 +168,14 @@ export function buildResults(
     return { items: [], isApproximate: false, hasAlternates: false };
   }
 
-  const exactCount = ranked.filter((r) => r.exact).length;
-  const isApproximate =
-    answers.some((a) => a.value !== "any") && exactCount < 2;
+  const active = answers.filter((a) => a.value !== "any");
+  // Padding a short answer out to four dishes with things that match nothing
+  // the diner asked for is worse than showing three. Only reach past the
+  // matches when there aren't enough of them to be a result at all. [M-16]
+  const matching = ranked.filter((r) => r.score > 0);
+  const base = active.length === 0 || matching.length >= 2 ? matching : ranked;
+  const pool = (base.length > 0 ? base : ranked).slice(0, RESULT_COUNT * 4);
 
-  // Alternates come from the same neighbourhood, not the whole menu.
-  const pool = ranked.slice(0, Math.min(ranked.length, RESULT_COUNT * 4));
   const pages = Math.max(1, Math.ceil(pool.length / RESULT_COUNT));
   const start = (((page % pages) + pages) % pages) * RESULT_COUNT;
   let window = pool.slice(start, start + RESULT_COUNT);
@@ -182,8 +184,10 @@ export function buildResults(
 
   return {
     items: window.map((r) => r.item),
-    isApproximate,
-    hasAlternates: pool.length > RESULT_COUNT,
+    // Say so whenever the diner is looking at something that doesn't tick
+    // every box, rather than passing a compromise off as a match.
+    isApproximate: active.length > 0 && window.some((r) => r.score < active.length),
+    hasAlternates: pool.length > window.length,
   };
 }
 

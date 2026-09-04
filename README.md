@@ -55,14 +55,28 @@ extraction time. For a given menu the engine:
 
 Results **rank the whole menu** against the answers rather than filtering it
 down, with partial credit for near-misses on ordinal axes (spice, richness).
-An answer combination nothing satisfies exactly still returns the closest
-dishes, labelled as such — there is no dead end. "Show me others" pages through
-equally-good alternates for the same answers, wrapping.
+It will return three dishes, or two, rather than padding to four with something
+that matches nothing the diner asked for. It reaches past the matches only when
+there are fewer than two of them — and then labels what it shows as closest
+matches, so a compromise is never passed off as a match. There is no dead end.
+"Show me others" pages through equally-good alternates for the same answers,
+wrapping.
 
 `npm run engine:check` runs it against three hand-tagged menus and asserts the
 behaviour above. Current output: the North Indian menu gets asked
 `format → protein`, the sushi menu `format → familiarity` (spice excluded
 entirely), and a five-item bakery counter is asked nothing at all.
+
+Point it at a saved `/api/extract` response to walk a real menu instead — the
+fastest way to sanity-check the engine against a new cuisine:
+
+```bash
+npm run engine:check -- ./extraction.json
+```
+
+A live Roman trattoria menu opens on `protein` rather than `format`, which is
+the adaptation working: spice scores 0.978 there (only three dishes carry heat)
+and loses to both.
 
 ## Architecture
 

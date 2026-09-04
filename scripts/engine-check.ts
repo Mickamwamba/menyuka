@@ -4,7 +4,12 @@
  * needed: these are hand-tagged menus, exercising the scoring only.
  *
  *   npm run engine:check
+ *
+ * Pass a real /api/extract response to walk that menu instead of the fixtures:
+ *
+ *   npm run engine:check -- ./some-extraction.json
  */
+import { readFileSync } from "node:fs";
 import { AXES, type Axis } from "../lib/tags";
 import { buildResults, scoreAxis, selectQuestion } from "../lib/questions";
 import type { Answer, MenuItem } from "../lib/types";
@@ -103,6 +108,47 @@ function walk(items: MenuItem[]) {
     pool = pool.filter((item) => item.tags[question.axis] === choice.value);
   }
   return { asked, answers, trace };
+}
+
+const realMenuPath = process.argv[2];
+if (realMenuPath) {
+  const extracted = JSON.parse(readFileSync(realMenuPath, "utf8"));
+  const items: MenuItem[] = extracted.items;
+  console.log(`\n=== ${realMenuPath} — ${items.length} items ===`);
+  for (const axis of AXES) {
+    const scored = scoreAxis(items, axis);
+    console.log(
+      `    ${axis.padEnd(12)} ${scored ? scored.score.toFixed(3) : "— no signal, excluded"}`,
+    );
+  }
+  // Walk every first answer, not just the popular one, to see the real spread.
+  const first = selectQuestion(items, []);
+  if (!first) {
+    console.log("  no questions — menu too small or too uniform");
+  } else {
+    for (const option of [...first.options, { value: "any", count: items.length }]) {
+      const answers: Answer[] = [{ axis: first.axis, value: option.value }];
+      let pool = option.value === "any"
+        ? items
+        : items.filter((i) => i.tags[first.axis] === option.value);
+      const path = [first.axis];
+      for (;;) {
+        const next = selectQuestion(pool, path);
+        if (!next) break;
+        const choice = next.options[0];
+        answers.push({ axis: next.axis, value: choice.value });
+        path.push(next.axis);
+        pool = pool.filter((i) => i.tags[next.axis] === choice.value);
+      }
+      const results = buildResults(items, answers);
+      console.log(
+        `  ${answers.map((a) => `${a.axis}=${a.value}`).join(" → ")}\n` +
+          `      ${results.items.map((i) => i.name).join(", ")}` +
+          `${results.isApproximate ? "  [closest]" : ""}`,
+      );
+    }
+  }
+  process.exit(0);
 }
 
 let failures = 0;

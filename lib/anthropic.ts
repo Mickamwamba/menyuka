@@ -80,7 +80,7 @@ Rules:
 - If a photo is blurry or cut off, transcribe what is legible and leave the rest out rather than inventing dishes. Never invent a dish, a price, or a description.
 - If several photos are given, they are pages of the same menu. Merge them and do not duplicate items that appear twice.
 - Tag every item on all six axes even when the menu is terse. Infer from the dish name and your knowledge of the cuisine — a confident inference is far more useful than defaulting to "other".
-- Use "other" only when the axis genuinely does not apply to the dish.
+- Use "other" only when the axis genuinely does not apply to the dish. In particular: a plated main course that isn't a soup, stew, salad, sandwich, or grill is format "plate", not "other"; and boar, venison, rabbit, duck, or offal is protein "game", not "other".
 - spice reflects how the dish is normally served at a restaurant of this cuisine, not how hot it could be made.
 - richness: light = a diner leaves still hungry-ish (salads, broths, small plates); rich = heavy, fatty, or very filling.`;
 
