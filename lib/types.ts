@@ -28,10 +28,9 @@ export type ItemTranslation = {
   blurb: string;
 };
 
+/** Menu content only. App copy is pre-translated in lib/translations. */
 export type Translation = {
   items: Record<string, ItemTranslation>;
-  /** Flow-critical UI strings, translated. Keys match lib/copy.ts. */
-  ui: Record<string, string>;
 };
 
 export type Answer = {

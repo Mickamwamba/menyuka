@@ -10,6 +10,7 @@ import { QuestionScreen } from "./screens/Questions";
 import { ResultsScreen } from "./screens/Results";
 import { ShowServerScreen } from "./screens/ShowServer";
 import { LANGUAGES, makeCopy } from "@/lib/copy";
+import { loadUiStrings } from "@/lib/translations";
 import type { PreparedImage } from "@/lib/image";
 import {
   applyAnswers,
@@ -78,6 +79,8 @@ function MenyukaSession({ initial }: { initial: StoredSession }) {
     initial.translations,
   );
   const [translateFailed, setTranslateFailed] = useState<Record<string, boolean>>({});
+  /** Pre-translated app copy for the chosen language — a local import, no call. */
+  const [uiStrings, setUiStrings] = useState<Record<string, string> | null>(null);
   /** Codes already requested for the current menu, so effects don't re-fire. */
   const requested = useRef(new Set(Object.keys(initial.translations)));
 
@@ -91,7 +94,20 @@ function MenyukaSession({ initial }: { initial: StoredSession }) {
 
   const language = LANGUAGES.find((entry) => entry.code === languageCode) ?? null;
   const translation = languageCode ? (translations[languageCode] ?? null) : null;
-  const copy = useMemo(() => makeCopy(translation?.ui ?? null), [translation]);
+  const copy = useMemo(() => makeCopy(uiStrings), [uiStrings]);
+
+  // App copy ships with the build, so this is a local chunk fetch rather than
+  // a model call — it lands well before the menu translation does.
+  useEffect(() => {
+    if (!language) return;
+    let cancelled = false;
+    void loadUiStrings(language.code).then((strings) => {
+      if (!cancelled) setUiStrings(strings);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [language]);
 
   const translating = Boolean(
     menu && language && !translations[language.code] && !translateFailed[language.code],
@@ -189,6 +205,7 @@ function MenyukaSession({ initial }: { initial: StoredSession }) {
     setTranslations({});
     setTranslateFailed({});
     requested.current = new Set();
+    // uiStrings is keyed to the language, not the menu, so it survives.
   }
 
   function chooseLanguage(code: string) {
