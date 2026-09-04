@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { toClientError, translateMenu } from "@/lib/anthropic";
-import { translatableCopy } from "@/lib/copy";
 
 export const maxDuration = 300;
 export const runtime = "nodejs";
@@ -19,7 +18,6 @@ export async function POST(request: Request) {
 
     const translation = await translateMenu({
       items,
-      ui: translatableCopy(),
       targetLanguage,
       menuLanguage: typeof menuLanguage === "string" ? menuLanguage : "unknown",
     });

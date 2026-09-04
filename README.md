@@ -21,6 +21,7 @@ only way to judge this thing.
 
 ```bash
 npm run engine:check   # question-engine adaptivity check, no API key needed
+npm run copy:check     # fail if app copy drifted from lib/translations
 npm run build          # production build
 npx eslint .           # lint
 ```
@@ -83,7 +84,8 @@ and loses to both.
 | | |
 |---|---|
 | `app/api/extract` | Photo(s) → one Claude vision call → transcribed, priced, tagged items + the menu's language + a polite "I'd like to order this" phrase in that language |
-| `app/api/translate` | Items + target language → one call returning per-dish name + plain-language blurb, *and* the flow-critical UI strings |
+| `app/api/translate` | Items + target language → per-dish name + plain-language blurb. Items are split into chunks of 12 and translated concurrently |
+| `lib/translations/` | The app's own UI strings, pre-translated at build time for all 16 languages. Nothing menu-derived — see the README there |
 | `lib/questions.ts` | Question scoring, selection, ranking, shuffle. Pure functions, no API |
 | `lib/session.ts` | sessionStorage only. No database, no accounts, nothing survives the tab |
 | `components/MenyukaApp.tsx` | The screen state machine |
@@ -92,6 +94,18 @@ Both API calls use `claude-opus-5` with adaptive thinking and structured
 outputs (Zod → `messages.parse`), at `effort: "medium"` for extraction and
 `"low"` for translation — extraction is the accuracy-critical call, translation
 is the latency-critical one.
+
+Two things keep the wait tolerable. The app's own interface copy — buttons,
+question prompts, answer labels — is **pre-translated at build time** rather
+than regenerated per session; it was 57% of the translate call's output while
+being identical for every menu in a language. And dish translation is **split
+into chunks of 12 run concurrently**, so wall-clock is the slowest chunk rather
+than the sum. Measured on the same menu: 23–60s before, 11–12s after, and a
+51-item menu now costs the same as a 17-item one.
+
+Regenerate app copy with `npm run copy:translate` after editing `lib/copy.ts`.
+`npm run copy:check` fails if you forget — the generated files carry a hash of
+the English source.
 
 Photos are downscaled to a 1568px long edge in the browser before upload.
 That's the largest edge Claude's vision actually uses, and it turns a 6 MB

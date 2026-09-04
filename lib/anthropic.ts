@@ -92,13 +92,14 @@ const TranslateSchema = z.object({
       blurb: z.string(),
     }),
   ),
-  ui: z.array(
-    z.object({
-      key: z.string(),
-      text: z.string(),
-    }),
-  ),
 });
+
+/**
+ * Output tokens dominate this call's latency, so the items are split and the
+ * chunks run concurrently — wall-clock becomes the slowest chunk rather than
+ * the sum. Blurbs are independent per dish, so nothing is lost by splitting.
+ */
+const TRANSLATE_CHUNK_SIZE = 12;
 
 const TRANSLATE_SYSTEM = `You help a diner who does not read the menu's language understand what each dish actually is.
 
@@ -106,9 +107,7 @@ For every menu item return:
 - "name": the dish name in the target language. If the name is a proper noun or has no real equivalent, transliterate it and keep it short — this is what appears above the description.
 - "blurb": ONE plain sentence, at most 18 words, in the target language, saying what the dish physically is: main ingredient, how it is cooked, how it arrives at the table. Assume the diner has never encountered this cuisine. Do not use the dish's own name inside the blurb, do not praise the dish, do not use restaurant-marketing language, and never guess an ingredient the name and description do not support.
 
-Also translate every string in the "ui" list into the target language. These are buttons and questions in a phone app: keep them short enough for a small button, keep the tone plain and direct, and preserve any punctuation like "2–3". Return every key you were given, unchanged, with its translated text.
-
-If the target language is the same as the menu language, still return the name as printed and still write the blurb.`;
+Return one entry per item you are given, keyed by the same id, and nothing else. If the target language is the same as the menu language, still return the name as printed and still write the blurb.`;
 
 type ExtractInput = { media_type: string; data: string }[];
 
@@ -181,22 +180,25 @@ export async function extractMenu(images: ExtractInput): Promise<ExtractedMenu> 
   };
 }
 
-export async function translateMenu(args: {
-  items: Pick<MenuItem, "id" | "name" | "originalDescription" | "category">[];
-  ui: Record<string, string>;
-  targetLanguage: string;
-  menuLanguage: string;
-}): Promise<Translation> {
+type TranslatableItem = Pick<
+  MenuItem,
+  "id" | "name" | "originalDescription" | "category"
+>;
+
+async function translateChunk(
+  items: TranslatableItem[],
+  targetLanguage: string,
+  menuLanguage: string,
+): Promise<Translation["items"]> {
   const payload = {
-    menu_language: args.menuLanguage,
-    target_language: args.targetLanguage,
-    items: args.items.map((item) => ({
+    menu_language: menuLanguage,
+    target_language: targetLanguage,
+    items: items.map((item) => ({
       id: item.id,
       name: item.name,
       printed_description: item.originalDescription ?? "",
       section: item.category ?? "",
     })),
-    ui: Object.entries(args.ui).map(([key, text]) => ({ key, text })),
   };
 
   const response = await getClient().messages.parse({
@@ -211,7 +213,7 @@ export async function translateMenu(args: {
     messages: [
       {
         role: "user",
-        content: `Target language: ${args.targetLanguage}\nMenu language: ${args.menuLanguage}\n\n${JSON.stringify(payload)}`,
+        content: `Target language: ${targetLanguage}\nMenu language: ${menuLanguage}\n\n${JSON.stringify(payload)}`,
       },
     ],
   });
@@ -220,16 +222,49 @@ export async function translateMenu(args: {
     throw new MenyukaApiError("We couldn't translate this menu.", 422);
   }
 
-  const parsed = response.parsed_output;
-  return {
-    items: Object.fromEntries(
-      parsed.items.map((item) => [
-        item.id,
-        { name: item.name.trim(), blurb: item.blurb.trim() },
-      ]),
+  return Object.fromEntries(
+    response.parsed_output.items.map((item) => [
+      item.id,
+      { name: item.name.trim(), blurb: item.blurb.trim() },
+    ]),
+  );
+}
+
+export async function translateMenu(args: {
+  items: TranslatableItem[];
+  targetLanguage: string;
+  menuLanguage: string;
+}): Promise<Translation> {
+  const chunks: TranslatableItem[][] = [];
+  for (let i = 0; i < args.items.length; i += TRANSLATE_CHUNK_SIZE) {
+    chunks.push(args.items.slice(i, i + TRANSLATE_CHUNK_SIZE));
+  }
+
+  const settled = await Promise.allSettled(
+    chunks.map((chunk) =>
+      translateChunk(chunk, args.targetLanguage, args.menuLanguage),
     ),
-    ui: Object.fromEntries(parsed.ui.map((entry) => [entry.key, entry.text])),
-  };
+  );
+
+  // A menu that is mostly translated is far better than an error screen, so a
+  // failed chunk drops its dishes rather than the whole request. The client
+  // already renders untranslated items, so those dishes fall back to their
+  // printed names.
+  const items: Translation["items"] = {};
+  let failed = 0;
+  for (const result of settled) {
+    if (result.status === "fulfilled") Object.assign(items, result.value);
+    else failed += 1;
+  }
+
+  if (failed === chunks.length) {
+    throw new MenyukaApiError("We couldn't translate this menu.", 422);
+  }
+  if (failed > 0) {
+    console.warn(`[menyuka] ${failed}/${chunks.length} translation chunks failed`);
+  }
+
+  return { items };
 }
 
 /** Turn SDK errors into something safe and useful to put on a phone screen. */

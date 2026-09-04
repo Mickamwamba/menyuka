@@ -5,7 +5,7 @@ import type { ExtractedMenu, Translation } from "./types";
  * the tab. Persisting it at all is only so a mis-tap on the browser back
  * button doesn't cost the diner their photo.
  */
-const KEY = "menyuka.session.v1";
+const KEY = "menyuka.session.v2";
 
 export type StoredSession = {
   menu: ExtractedMenu | null;

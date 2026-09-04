@@ -7,7 +7,9 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "engine:check": "tsx scripts/engine-check.ts"
+    "engine:check": "tsx scripts/engine-check.ts",
+    "copy:translate": "tsx --env-file-if-exists=.env --env-file-if-exists=.env.local scripts/translate-ui.ts",
+    "copy:check": "tsx scripts/translate-ui.ts --check"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.123.0",
