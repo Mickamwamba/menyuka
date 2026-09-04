@@ -1,26 +1,63 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Committed to a single light palette rather than following the OS theme:
+ * the show-to-server screen gets handed across a table in a dim restaurant,
+ * and a dark card with small light text is the wrong thing to hand someone.
+ */
+@theme {
+  --color-bg: #fbf9f6;
+  --color-surface: #ffffff;
+  --color-ink: #1c1917;
+  --color-muted: #78716c;
+  --color-faint: #a8a29e;
+  --color-line: #e9e3da;
+  --color-accent: #b04a1f;
+  --color-accent-ink: #8a3a17;
+  --color-accent-soft: #fdf1ea;
+
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+html,
+body {
+  height: 100%;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  /* A phone being handed around shouldn't rubber-band or zoom on double-tap. */
+  overscroll-behavior-y: none;
+  touch-action: manipulation;
+}
+
+@utility safe-bottom {
+  padding-bottom: max(1rem, env(safe-area-inset-bottom));
+}
+
+@keyframes menyuka-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@utility rise {
+  animation: menyuka-rise 220ms ease-out both;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

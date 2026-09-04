@@ -1,36 +1,105 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Menyuka — MVP
 
-## Getting Started
+Photograph a physical menu on your phone. Get it translated, or answer 2–3
+single-tap questions and land on 2–4 dishes you can hand across the table.
 
-First, run the development server:
+No account, no install, no restaurant relationship. Cold upload only.
+
+See `Menyuka_MVP_Build_Context.md` for the product brief this implements.
+
+## Run it
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+cp .env.example .env.local   # then paste your Anthropic API key in
+npm install
+npm run dev                  # http://localhost:3000
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open it on a phone on the same network (`http://<your-lan-ip>:3000`) — the
+camera capture, the thumb-reach targets, and the hand-it-over screen are the
+only way to judge this thing.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run engine:check   # question-engine adaptivity check, no API key needed
+npm run build          # production build
+npx eslint .           # lint
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## The flow
 
-## Learn More
+`upload → language → confirmation → fork → (browse | 2–3 questions → results) → show to server`
 
-To learn more about Next.js, take a look at the following resources:
+Extraction is kicked off the instant a photo is picked and runs *while* the
+diner chooses a language, so the slowest call in the flow hides behind a screen
+they were going to see anyway. The full item list is never the first thing shown
+after upload — the confirmation step comes first, because OCR from an
+uncontrolled photo is error-prone and this is the diner's most anxious moment.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## How the question engine works
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+`lib/questions.ts`. Six candidate axes (`protein`, `spice`, `format`,
+`familiarity`, `prep`, `richness`); every item is tagged on all six at
+extraction time. For a given menu the engine:
 
-## Deploy on Vercel
+1. Scores each axis by **Shannon entropy × coverage** over the dishes still in
+   play — how evenly it splits the menu, discounted by how much of the menu it
+   describes at all.
+2. **Excludes axes with no real signal**: fewer than two distinct values, under
+   55% coverage, or under 0.65 bits of entropy (an 85/15 split fails, 80/20
+   passes). This is what keeps a spice question off a sushi menu.
+3. Asks the highest-scoring axis, then **re-scores the survivors** before
+   choosing the next question — so question two adapts to what question one
+   left behind.
+4. Stops at three questions, or as soon as the remaining set is small enough
+   that another tap would buy nothing.
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+Results **rank the whole menu** against the answers rather than filtering it
+down, with partial credit for near-misses on ordinal axes (spice, richness).
+An answer combination nothing satisfies exactly still returns the closest
+dishes, labelled as such — there is no dead end. "Show me others" pages through
+equally-good alternates for the same answers, wrapping.
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+`npm run engine:check` runs it against three hand-tagged menus and asserts the
+behaviour above. Current output: the North Indian menu gets asked
+`format → protein`, the sushi menu `format → familiarity` (spice excluded
+entirely), and a five-item bakery counter is asked nothing at all.
+
+## Architecture
+
+| | |
+|---|---|
+| `app/api/extract` | Photo(s) → one Claude vision call → transcribed, priced, tagged items + the menu's language + a polite "I'd like to order this" phrase in that language |
+| `app/api/translate` | Items + target language → one call returning per-dish name + plain-language blurb, *and* the flow-critical UI strings |
+| `lib/questions.ts` | Question scoring, selection, ranking, shuffle. Pure functions, no API |
+| `lib/session.ts` | sessionStorage only. No database, no accounts, nothing survives the tab |
+| `components/MenyukaApp.tsx` | The screen state machine |
+
+Both API calls use `claude-opus-5` with adaptive thinking and structured
+outputs (Zod → `messages.parse`), at `effort: "medium"` for extraction and
+`"low"` for translation — extraction is the accuracy-critical call, translation
+is the latency-critical one.
+
+Photos are downscaled to a 1568px long edge in the browser before upload.
+That's the largest edge Claude's vision actually uses, and it turns a 6 MB
+camera JPEG into a few hundred KB — which matters more than anything else on
+restaurant wifi.
+
+## Decisions worth knowing about
+
+- **Question selection runs on the client**, not the server. It's the same pure
+  scoring function the brief specifies, executed where the menu data already
+  lives — a server round-trip per question would add a visible pause to every
+  single tap, on exactly the connection the primary user is on.
+- **One light theme, no dark mode.** The show-to-server screen gets handed
+  across a table in a dim restaurant; a dark card with small light text is the
+  wrong thing to hand someone.
+- **Failed translation is degraded, not broken.** The flow still works in the
+  menu's own language, so a translation failure stays quiet instead of blocking.
+- **UI copy translation is limited** to the strings needed to get through the
+  flow, per the brief — menu content is the translation priority.
+
+## Not built (out of scope for this MVP)
+
+Restaurant accounts or partner portal, QR partner flow, availability sync,
+payments, user accounts or history, dish photography, POS integration, and
+full multilingual UI chrome.
