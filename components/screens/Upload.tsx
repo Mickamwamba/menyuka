@@ -1,16 +1,23 @@
 "use client";
 
-import { useRef, useState } from "react";
-import { Button, ErrorNote, Screen, Subtitle, Title } from "../ui";
+import { useState } from "react";
+import { ErrorNote, Screen, Subtitle, Title } from "../ui";
 import { prepareImage, type PreparedImage } from "@/lib/image";
+
+/**
+ * The two controls are <label>s, not buttons. iOS Safari refuses to open a
+ * file picker from a programmatic .click() on a display:none input, so the
+ * inputs stay in the layout (sr-only) and the label activates them natively —
+ * no JS in the path at all.
+ */
+const CONTROL =
+  "flex w-full min-h-14 items-center justify-center rounded-2xl px-5 text-[1.05rem] font-medium transition active:scale-[0.99] cursor-pointer";
 
 export function UploadScreen({
   onReady,
 }: {
   onReady: (images: PreparedImage[]) => void;
 }) {
-  const cameraRef = useRef<HTMLInputElement>(null);
-  const fileRef = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,17 +49,16 @@ export function UploadScreen({
           </Subtitle>
         </div>
 
-        <div className="mt-8 space-y-3">
-          <Button onClick={() => cameraRef.current?.click()} disabled={busy}>
+        <div className={`mt-8 space-y-3 ${busy ? "pointer-events-none opacity-50" : ""}`}>
+          <label htmlFor="menyuka-camera" className={`${CONTROL} bg-accent text-white shadow-sm`}>
             {busy ? "Preparing…" : "Take a photo"}
-          </Button>
-          <Button
-            variant="secondary"
-            onClick={() => fileRef.current?.click()}
-            disabled={busy}
+          </label>
+          <label
+            htmlFor="menyuka-library"
+            className={`${CONTROL} border border-line bg-surface text-ink`}
           >
             Choose from photos
-          </Button>
+          </label>
           <p className="pt-1 text-center text-[0.85rem] text-faint">
             Multi-page menu? Select up to 4 pages at once.
           </p>
@@ -65,19 +71,19 @@ export function UploadScreen({
         ) : null}
 
         <input
-          ref={cameraRef}
+          id="menyuka-camera"
           type="file"
           accept="image/*"
           capture="environment"
-          className="hidden"
+          className="sr-only"
           onChange={(event) => handleFiles(event.target.files)}
         />
         <input
-          ref={fileRef}
+          id="menyuka-library"
           type="file"
           accept="image/*"
           multiple
-          className="hidden"
+          className="sr-only"
           onChange={(event) => handleFiles(event.target.files)}
         />
       </div>
